@@ -1,17 +1,22 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"regexp"
-	"strconv"
-	"strings"
+
+	"stock_exchange_sim/cmd/simulator/components"
 )
 
 type State struct {
 	time  int
 	stock map[string]int
+	tasks map[string]TaskDetails
+}
+
+type TaskDetails struct {
+	dependecies map[string]int
+	results     map[string]int
+	delay       int
 }
 
 func check(err error) {
@@ -31,24 +36,9 @@ func main() {
 	check(err)
 	defer file.Close()
 
-	initState(file)
+	state := components.InitState(file)
+	fmt.Println(state)
 }
 
-func initState(file *os.File) State {
-	state := State{
-		time: 0,
-	}
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		re := regexp.MustCompile(`\b\w+:[\d\.]+\b`)
-		resources := re.FindAllString(scanner.Text(), -1)
-		if len(resources) == 1 {
-			key_value := strings.Split(resources[0], ":")
-			result, err := strconv.Atoi(key_value[1])
-			check(err)
-			state.stock[key_value[0]] = result
-		}
-	}
-	return state
+func tasksEligible(state State) {
 }
