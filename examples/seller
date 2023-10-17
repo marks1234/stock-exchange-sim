@@ -3,7 +3,14 @@ transport:0
 skills:0
 fame:0
 euro:1
+# euro:
+# :1
+
+# :(repos:10):(skills:1):100
 code:(repos:10):(skills:1):100
-optimize_profile:(repos:10):(fame:20):1
+optimize_profile:(repos:10):(fame:5):1
+# optimize_profile:(repos:10):(fame:20):15
 sell_skills:(skills:1;fame:10):(euro:100):10
+
 optimize:(euro)
+

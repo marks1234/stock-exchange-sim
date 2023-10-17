@@ -8,50 +8,112 @@ import (
 	"strings"
 )
 
+// State structure defines the current state of a system.
 type State struct {
-	time  int
-	stock map[string]int
-	tasks map[string]TaskDetails
+	Time   int                     // Current Time of the system.
+	Stocks map[string]StockDetails // Current Stocks/resources in the system.
+	goal   map[string]bool
 }
 
+type StockDetails struct {
+	isInitialized        bool
+	Amount               int
+	Producers, Consumers map[string]TaskDetails
+}
+
+// TaskDetails structure defines properties of a task.
 type TaskDetails struct {
-	dependecies map[string]int
-	results     map[string]int
-	delay       int
+	StockNeeded, StockResults map[string]int // Prerequisites for the task.
+	Delay                     int            // Time required to execute the task.
 }
 
+// Utility function to handle errors.
 func check(err error) {
 	if err != nil {
 		panic(err)
 	}
 }
 
-// regex to find all the matches for the processes
 //^(\w+):\((\w+:\d+(?:;\w+:\d+)*)\):\((\w+:\d+(?:;\w+:\d+)*)\):(\d+)$
 
+func (s State) IsTime() bool {
+	return s.goal["time"]
+}
+
+func (s State) OptimizedList() string {
+	var results string
+	var count int
+	for key := range s.goal {
+		if key != "time" {
+			count++
+			results = key
+		}
+		if count > 1 {
+			panic("Too many resources to optimize")
+		}
+	}
+	if count == 0 && !s.IsTime() {
+		panic("Optimization not set")
+	}
+	return results
+}
+
+// InitState initializes the state from a provided file.
 func InitState(file *os.File) State {
 	state := State{
-		time:  0,
-		stock: map[string]int{},
-		tasks: map[string]TaskDetails{},
+		Time:   0,
+		Stocks: make(map[string]StockDetails),
+		goal:   make(map[string]bool),
 	}
 	scanner := bufio.NewScanner(file)
+	optimize_found := false
 
 	for scanner.Scan() {
-		re := regexp.MustCompile(`\b\w+:[\d\.]+\b`)
-		resources := re.FindAllString(scanner.Text(), -1)
-		if len(resources) == 1 {
-			key_value := strings.Split(resources[0], ":")
-			result, err := strconv.Atoi(key_value[1])
-			check(err)
-			state.stock[key_value[0]] = result
+		text := scanner.Text()
+		if len(text) != 0 {
+			if text[0] == '#' {
+				continue
+			}
+		} else {
 			continue
 		}
-		re = regexp.MustCompile(`^(\w+):\((\w+:\d+(?:;\w+:\d+)*)\):\((\w+:\d+(?:;\w+:\d+)*)\):(\d+)$`)
-		resources = re.FindAllString(scanner.Text(), -1)
+		// Extract resource details from the current line.
+		re := regexp.MustCompile(`\b\w+:[\d\.]+\b`)
+		resources := re.FindAllString(text, -1)
 		if len(resources) == 1 {
-			name, task := makeTask(resources[0])
-			state.tasks[name] = task
+
+			name, details := initStock(resources, true)
+
+			state.Stocks[name] = details
+			continue
+		} else if len(resources) > 1 {
+			for _, resource := range resources {
+				key_value := strings.Split(resource, ":")
+				if !state.Stocks[key_value[0]].isInitialized {
+					name, details := initStock([]string{resource}, false)
+
+					state.Stocks[name] = details
+				}
+			}
+		}
+
+		// Extract task details from the current line.
+		re = regexp.MustCompile(`^(\w+):\((\w+:\d+(?:;\w+:\d+)*)\):\((\w+:\d+(?:;\w+:\d+)*)\):(\d+)$`)
+		resources = re.FindAllString(text, -1)
+		if len(resources) == 1 {
+			task, details := makeTask(resources[0])
+
+			state.addConsumersAndProducers(task, details)
+		}
+
+		re = regexp.MustCompile(`optimize:\(.+\)`)
+		resources = re.FindAllString(text, -1)
+		if len(resources) == 1 {
+			if optimize_found == true {
+				panic("Too many Optimizations")
+			}
+			optimize_found = true
+			state.goal = getGoals(resources[0])
 		}
 
 	}
@@ -59,13 +121,64 @@ func InitState(file *os.File) State {
 	return state
 }
 
+func initStock(s_arr []string, write_amount bool) (stoc_name string, stock_details StockDetails) {
+	if write_amount {
+
+		key_value := strings.Split(s_arr[0], ":")
+		result, err := strconv.Atoi(key_value[1])
+		check(err)
+		stoc_name = key_value[0]
+		stock_details = StockDetails{
+			isInitialized: true,
+			Amount:        result,
+			Producers:     make(map[string]TaskDetails),
+			Consumers:     make(map[string]TaskDetails),
+		}
+
+	} else {
+		key_value := strings.Split(s_arr[0], ":")
+		stoc_name = key_value[0]
+		stock_details = StockDetails{
+			isInitialized: true,
+			Amount:        0,
+			Producers:     make(map[string]TaskDetails),
+			Consumers:     make(map[string]TaskDetails),
+		}
+	}
+	return
+}
+
+func (state *State) addConsumersAndProducers(task string, task_details TaskDetails) {
+	for stock_name := range task_details.StockNeeded {
+		stock := state.Stocks[stock_name]
+		stock.Consumers[task] = task_details
+	}
+	for stock_name := range task_details.StockResults {
+		stock := state.Stocks[stock_name]
+		stock.Producers[task] = task_details
+	}
+}
+
+func getGoals(s string) map[string]bool {
+	results := regexp.MustCompile(`\w+`).FindAllString(s, -1)
+	mapped := map[string]bool{}
+	for _, result := range results[1:] {
+		mapped[result] = true
+	}
+
+	return mapped
+}
+
+// makeTask parses a string to extract task name and its details.
 func makeTask(s string) (string, TaskDetails) {
 	name := ""
 	task := TaskDetails{}
 	open_bracket := 0
 	colon_count := 0
 	str_store := ""
+
 	for _, r := range s {
+		// Handle nested content within parentheses.
 		if r == '(' {
 			open_bracket++
 		}
@@ -77,37 +190,41 @@ func makeTask(s string) (string, TaskDetails) {
 			colon_count++
 			switch colon_count {
 			case 1:
+				// Extract task name.
 				name = str_store
 				str_store = ""
-				continue
 			case 2:
-				task.dependecies = makeDependencyResultMap(str_store)
+				// Extract task StockNeeded.
+				task.StockNeeded = makeStockneededResultMap(str_store)
 				str_store = ""
-				continue
 			case 3:
-				task.results = makeDependencyResultMap(str_store)
+				// Extract task Results.
+				task.StockResults = makeStockneededResultMap(str_store)
 				str_store = ""
-				continue
 			}
+			continue
 		}
 
 		str_store += string(r)
 
 	}
-	delay, err := strconv.Atoi(str_store)
+	// Convert Delay (stored as string) to integer.
+	Delay, err := strconv.Atoi(str_store)
 	check(err)
-	task.delay = delay
+	task.Delay = Delay
 
 	return name, task
 }
 
-func makeDependencyResultMap(s string) map[string]int {
-	return_map := map[string]int{}
-	results := regexp.MustCompile("\\w+").FindAllString(s, -1)
+// makeStockneededResultMap generates a map of dependencies/Results from a string.
+func makeStockneededResultMap(s string) map[string]int {
+	return_map := make(map[string]int)
+	Results := regexp.MustCompile("\\w+").FindAllString(s, -1)
 
-	for i, value := range results {
+	// Iterate over the Results in pairs (name, value).
+	for i, value := range Results {
 		if i%2 == 0 {
-			result, err := strconv.Atoi(results[i+1])
+			result, err := strconv.Atoi(Results[i+1])
 			check(err)
 			return_map[value] = result
 		}

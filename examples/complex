@@ -1,0 +1,27 @@
+#
+# build exercise - Computer Assembly Factory
+#
+# stock      name:quantity
+plastic:20
+silicon:15
+aluminum:12
+copper:10
+gold:20
+glass:6
+#
+# process   name:(need1:qty1;need2:qty2;[...]):(result1:qty1;result2:qty2;[...]):delay
+#
+mold_case:(plastic:3;aluminum:1):(case:1):25
+forge_cpu:(silicon:2;copper:1;gold:1):(cpu:1):40
+forge_gpu:(silicon:1;aluminum:1;gold:1):(gpu:1):35
+produce_ram:(silicon:1;copper:1):(ram:1):30
+produce_ssd:(silicon:2;plastic:1;copper:1):(ssd:1):35
+produce_motherboard:(silicon:1;copper:2;gold:1):(motherboard:1):45
+produce_screen:(glass:1;plastic:2;copper:1):(screen:1):50
+assemble_computer:(case:1;cpu:1;gpu:1;ram:2;ssd:1;motherboard:1;screen:1):(computer:1):70
+#
+# optimization goal: Given the stock, delay for each process, 
+# and the ultimate goal of maximizing computer production.
+#
+optimize:(computer)
+#
