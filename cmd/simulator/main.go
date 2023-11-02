@@ -3,15 +3,20 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
+	
 
 	"stock_exchange_sim/cmd/simulator/components"
 )
 
+type (
+	State        = components.State
+	TaskDetails  = components.TaskDetails
+	StockDetails = components.StockDetails
+)
+
 type Node struct {
-	name         string
-	dependencies map[string]int
-	time         int
+	name   string
+	weight int
 }
 
 func check(err error) {
@@ -32,45 +37,37 @@ func main() {
 	defer file.Close()
 
 	state := components.InitState(file)
+
+	pathCreator(state)
 	// eligibile_tasks := tasksEligible(state)
-	optimizations := state.OptimizedList()
-
-	for stock, details := range state.Stocks {
-		fmt.Println(stock, details.Amount)
-		for task, details := range details.Consumers {
-			fmt.Print("Consumer: ")
-			fmt.Println(task, details)
-		}
-		for task, details := range details.Producers {
-			fmt.Print("Producer: ")
-			fmt.Println(task, details)
-		}
-	}
 	// fmt.Println(eligibile_tasks)
-	fmt.Println(optimizations)
 	// fmt.Println(state.IsTime())
-
-	dot := GenerateDOT(state)
-	os.WriteFile("output.dot", []byte(dot), 0o644)
+	// components.GenerateDOT(state)
 }
 
-func GenerateDOT(s components.State) string {
-	var output strings.Builder
-	output.WriteString("digraph G {\n")
-	output.WriteString("\tnode [shape=circle];\n")
-	for stock, details := range s.Stocks {
-		output.WriteString(fmt.Sprintf("\t\"%s %s\";\n", stock, fmt.Sprint(details.Amount)))
+func hasEmptyProducer(stock StockDetails) bool {
+	if len(stock.Producers) <= 0 {
+		return true
 	}
-	for stock, stockDetail := range s.Stocks {
-		for taskName, taskDetail := range stockDetail.Producers {
-			for consumedStock := range taskDetail.StockNeeded {
-				output.WriteString(fmt.Sprintf("\t\"%s %s\" -> \"%s %s\" [label=\"%s\"];\n", consumedStock, fmt.Sprint(s.Stocks[consumedStock].Amount), stock, fmt.Sprint(s.Stocks[stock].Amount), taskName))
-			}
-		}
-	}
-	output.WriteString("}")
-	return output.String()
+	return false
 }
 
-func createDependencyGraph(state components.State) {
+func pathCreator(state State) {
+	optimization := state.Optimized()
+	stock := state.Stocks[optimization]
+	// finished := false
+	// var return_stack [][]StockDetails
+
+	for finished {
+		var stack []StockDetails
+		var queue []StockDetails
+		stack = append(stack, stock)
+		
+		if hasEmptyProducer(stock) {
+			stack
+		} 
+
+	}
 }
+
+

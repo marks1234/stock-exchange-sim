@@ -2,6 +2,8 @@ package components
 
 import (
 	"bufio"
+	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"strconv"
@@ -16,6 +18,7 @@ type State struct {
 }
 
 type StockDetails struct {
+	Name                 string
 	isInitialized        bool
 	Amount               int
 	Producers, Consumers map[string]TaskDetails
@@ -23,8 +26,30 @@ type StockDetails struct {
 
 // TaskDetails structure defines properties of a task.
 type TaskDetails struct {
+	Name                      string
 	StockNeeded, StockResults map[string]int // Prerequisites for the task.
 	Delay                     int            // Time required to execute the task.
+}
+
+func (state *State) DoTask(taskDetails TaskDetails) {
+	// Consumes
+	for stock, amount := range taskDetails.StockNeeded {
+		stockDetails := state.Stocks[stock]
+		stockDetails.Amount -= amount
+		if stockDetails.Amount < 0 {
+			err := errors.New(fmt.Sprintf("\"%s\" Was changed into %02d", stock, stockDetails.Amount))
+			check(err)
+		}
+		state.Stocks[stock] = stockDetails
+	}
+	// Produces
+	for stock, amount := range taskDetails.StockResults {
+		stockDetails := state.Stocks[stock]
+		stockDetails.Amount += amount
+		state.Stocks[stock] = stockDetails
+	}
+
+	
 }
 
 // Utility function to handle errors.
@@ -40,7 +65,7 @@ func (s State) IsTime() bool {
 	return s.goal["time"]
 }
 
-func (s State) OptimizedList() string {
+func (s State) Optimized() string {
 	var results string
 	var count int
 	for key := range s.goal {
@@ -129,6 +154,7 @@ func initStock(s_arr []string, write_amount bool) (stoc_name string, stock_detai
 		check(err)
 		stoc_name = key_value[0]
 		stock_details = StockDetails{
+			Name:          stoc_name,
 			isInitialized: true,
 			Amount:        result,
 			Producers:     make(map[string]TaskDetails),
@@ -139,6 +165,7 @@ func initStock(s_arr []string, write_amount bool) (stoc_name string, stock_detai
 		key_value := strings.Split(s_arr[0], ":")
 		stoc_name = key_value[0]
 		stock_details = StockDetails{
+			Name:          stoc_name,
 			isInitialized: true,
 			Amount:        0,
 			Producers:     make(map[string]TaskDetails),
@@ -169,7 +196,7 @@ func getGoals(s string) map[string]bool {
 	return mapped
 }
 
-// makeTask parses a string to extract task name and its details.
+// makeTask parses a string to extract task Name and its details.
 func makeTask(s string) (string, TaskDetails) {
 	name := ""
 	task := TaskDetails{}
@@ -190,7 +217,7 @@ func makeTask(s string) (string, TaskDetails) {
 			colon_count++
 			switch colon_count {
 			case 1:
-				// Extract task name.
+				// Extract task Name.
 				name = str_store
 				str_store = ""
 			case 2:
@@ -208,6 +235,9 @@ func makeTask(s string) (string, TaskDetails) {
 		str_store += string(r)
 
 	}
+	// Assign the task: Name
+	task.Name = name
+
 	// Convert Delay (stored as string) to integer.
 	Delay, err := strconv.Atoi(str_store)
 	check(err)
@@ -221,7 +251,7 @@ func makeStockneededResultMap(s string) map[string]int {
 	return_map := make(map[string]int)
 	Results := regexp.MustCompile("\\w+").FindAllString(s, -1)
 
-	// Iterate over the Results in pairs (name, value).
+	// Iterate over the Results in pairs (Name, value).
 	for i, value := range Results {
 		if i%2 == 0 {
 			result, err := strconv.Atoi(Results[i+1])
